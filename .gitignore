@@ -1,0 +1,18 @@
+# 原版脚本解包参考（约 279MB / 4100+ 文件，仅本地查证用，不入库）
+原版脚本参考/
+
+# 第三方 mod 源码参考（不属于本项目）
+2119742489/
+376333686/
+
+# 教程仓库（约 104MB，按需自行更新）
+饥荒Mod开发指南/dstmod-tutorial/
+
+# 自动生成物（lua_check.py 缺失时会自动重建）
+landshrine/tools/vanilla_symbols.json
+__pycache__/
+*.pyc
+
+# 本地编辑器/系统杂项
+.DS_Store
+Thumbs.db
