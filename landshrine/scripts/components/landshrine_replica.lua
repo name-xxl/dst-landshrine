@@ -3,10 +3,12 @@
     客机通过 inst.replica.landshrine 读取土地庙的激活状态
 ]]
 
+local LandShrineConfig = require("landshrine_config")
+
 local LandShrine = Class(function(self, inst)
     self.inst = inst
     -- 激活状态：客机用它决定右键菜单是否显示「上香」，以及后续地图图标的状态
-    self._activated = net_bool(inst.GUID, "landshrine._activated", "landshrineactivateddirty")
+    self._activated = net_bool(inst.GUID, "landshrine._activated", LandShrineConfig.EVENT_ACTIVATED_DIRTY)
 end)
 
 function LandShrine:SetActivated(activated)

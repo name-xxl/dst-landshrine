@@ -4,13 +4,16 @@
     永久持有、无限次使用：身上带着它，在任意位置打开世界地图即可点选已激活的庙传送
     （判定在 modmain 的传送门条件里，道具本身只是门票）。
 
-    开发期外观：借用原版指南针的动画与物品图标，正式版替换为自制美术。
+    外观：世界模型与物品图标均为自制（anim/landshrine_portablemap.zip，单帧 idle）。
 ]]
 
 local assets =
 {
-    Asset("ANIM", "anim/compass.zip"),
+    Asset("ANIM", "anim/landshrine_portablemap.zip"),
+    Asset("ATLAS", "images/inventoryimages.xml"), -- 自制物品图标图集
 }
+
+local BUILD_NAME = "landshrine_portablemap"
 
 local function fn()
     local inst = CreateEntity()
@@ -21,9 +24,9 @@ local function fn()
 
     MakeInventoryPhysics(inst)
 
-    inst.AnimState:SetBank("compass")
-    inst.AnimState:SetBuild("compass")
-    inst.AnimState:PlayAnimation("idle")
+    inst.AnimState:SetBank(BUILD_NAME)
+    inst.AnimState:SetBuild(BUILD_NAME)
+    inst.AnimState:PlayAnimation("idle", true)
 
     inst:AddTag("landshrine_portablemap")
 
@@ -38,8 +41,8 @@ local function fn()
     inst:AddComponent("inspectable")
 
     inst:AddComponent("inventoryitem")
-    -- 占位图标：借用原版指南针，正式版替换为自制贴图
-    inst.components.inventoryitem:ChangeImageName("compass")
+    inst.components.inventoryitem.atlasname = "images/inventoryimages.xml" -- 注意是 atlasname（联网同步字段），atlas 无效
+    inst.components.inventoryitem:ChangeImageName("landshrine_portablemap")
 
     return inst
 end

@@ -6,6 +6,9 @@
          —— 客机的放置器靠它把幽灵变红，服务端的 canbuild 才是权威判定
 ]]
 
+local LandShrineConfig = require("landshrine_config")
+local Slots = require("landshrine_slots")
+
 local LandShrineNetwork = Class(function(self, inst)
     self.inst = inst
     self.shrines = {}     -- [shrine] = true
@@ -40,11 +43,8 @@ function LandShrineNetwork:Register(shrine)
         self.occupied[key] = shrine
     end
 
-    shrine._landshrine_network_onremove = function()
-        self:Unregister(shrine)
-    end
-    self.inst:ListenForEvent("onremove", shrine._landshrine_network_onremove, shrine)
-
+    -- 注销不在这里挂监听：庙被移除时，实体 Remove 流程必然回调组件的 OnRemoveEntity，
+    -- 由 landshrine 组件自己调 Unregister（那边是唯一的注销路径）
     self:Publish()
 end
 
@@ -53,11 +53,6 @@ function LandShrineNetwork:Unregister(shrine)
         return
     end
     self.shrines[shrine] = nil
-
-    if shrine._landshrine_network_onremove ~= nil then
-        self.inst:RemoveEventCallback("onremove", shrine._landshrine_network_onremove, shrine)
-        shrine._landshrine_network_onremove = nil
-    end
 
     for key, other in pairs(self.occupied) do
         if other == shrine then
@@ -69,9 +64,6 @@ function LandShrineNetwork:Unregister(shrine)
 end
 
 function LandShrineNetwork:OnRemoveFromEntity()
-    for shrine in pairs(self.shrines) do
-        shrine._landshrine_network_onremove = nil
-    end
     self.shrines = {}
     self.occupied = {}
 end
@@ -131,14 +123,28 @@ function LandShrineNetwork:TeleportPlayerToShrine(player, shrine)
     -- 注意：原版那些 FindWalkableOffset(..., NoHoles) 调用里的 NoHoles 是 componentutil.lua 里的
     -- 局部函数，mod 文件里读不到（strict.lua 会报 "variable 'NoHoles' is not declared"），
     -- 所以这里不传那第七个参数（customcheckfn 允许为 nil）。
-    local offset = FindWalkableOffset(Vector3(tx, 0, tz), math.random() * TWOPI, 2, 8, false, true)
+    local offset = FindWalkableOffset(Vector3(tx, 0, tz), math.random() * TWOPI,
+        LandShrineConfig.TELEPORT_ARRIVE_MIN_DIST, LandShrineConfig.TELEPORT_ARRIVE_MAX_DIST, false, true)
     if offset == nil then
         print("[土地庙] 传送失败：目标土地庙旁找不到能站人的落点")
         return false, "LANDSHRINE_NOSPACE"
     end
     tx, tz = tx + offset.x, tz + offset.z
 
-    -- 跟随者（切斯特、宠物、猪人等）
+    -- 把玩家的随从一起搬过去（各来源错开一个身位，避免叠在一起）：
+    --   跟随者（切斯特、宠物、猪人等）、背包栏物品带的随从、背包外容器物品带的随从
+    --   （后两种例如眼骨带来的切斯特）
+    local function MoveItemSlotFollowers(slots, dx, dz)
+        for _, item in pairs(slots) do
+            local item_leader = item.components.leader
+            if item_leader ~= nil and item_leader.followers ~= nil then
+                for follower in pairs(item_leader.followers) do
+                    MoveBodyWithPlayer(follower, tx + dx, 0, tz + dz)
+                end
+            end
+        end
+    end
+
     local leader = player.components.leader
     if leader ~= nil and leader.followers ~= nil then
         for follower in pairs(leader.followers) do
@@ -146,28 +152,12 @@ function LandShrineNetwork:TeleportPlayerToShrine(player, shrine)
         end
     end
 
-    -- 背包里、以及背包外容器里携带的随从（例如眼骨带来的切斯特）
     local inventory = player.components.inventory
     if inventory ~= nil then
-        for _, item in pairs(inventory.itemslots) do
-            local item_leader = item.components.leader
-            if item_leader ~= nil and item_leader.followers ~= nil then
-                for follower in pairs(item_leader.followers) do
-                    MoveBodyWithPlayer(follower, tx, 0, tz + 1)
-                end
-            end
-        end
-
+        MoveItemSlotFollowers(inventory.itemslots, 0, 1)
         local container = inventory:GetOverflowContainer()
         if container ~= nil then
-            for _, item in pairs(container.slots) do
-                local item_leader = item.components.leader
-                if item_leader ~= nil and item_leader.followers ~= nil then
-                    for follower in pairs(item_leader.followers) do
-                        MoveBodyWithPlayer(follower, tx, 0, tz - 1)
-                    end
-                end
-            end
+            MoveItemSlotFollowers(container.slots, 0, -1)
         end
     end
 
@@ -219,21 +209,15 @@ function LandShrineNetwork:GetNearestShrine(player)
     return nearest
 end
 
--- 把占用的地形槽压缩成 "5,6,8" 这样的字符串
+-- 把占用的地形槽压缩成 "5,6,8" 这样的字符串（协议实现见纯模块 landshrine_slots）
 function LandShrineNetwork:GetOccupiedString()
-    local ids = {}
+    local keys = {}
     for key, shrine in pairs(self.occupied) do
         if shrine:IsValid() then
-            table.insert(ids, key)
+            table.insert(keys, key)
         end
     end
-    table.sort(ids)
-
-    local strs = {}
-    for _, id in ipairs(ids) do
-        table.insert(strs, tostring(id))
-    end
-    return table.concat(strs, ",")
+    return Slots.Encode(keys)
 end
 
 function LandShrineNetwork:Publish()
@@ -256,7 +240,7 @@ function LandShrineNetwork:PushToPlayer(player)
 end
 
 --------------------------------------------------------------------------
--- 调试用（控制台入口见 modmain 的 LandShrineDebug）
+-- 调试用（控制台入口见 scripts/landshrine_debug.lua）
 --------------------------------------------------------------------------
 
 -- 解除全部登记：本次会话内可在同一地形重复建造，便于测试

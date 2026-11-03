@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<spriter_data generator="BrashMonkey Spriter" generator_version="b5" scml_version="1.0">
+	<folder id="0" name="shrine">
+		<file id="0" name="shrine/shrine_off.png" width="316" height="300" pivot_x="0.5" pivot_y="1.0"/>
+		<file id="1" name="shrine/shrine_on.png" width="316" height="300" pivot_x="0.5" pivot_y="1.0"/>
+	</folder>
+	<entity id="0" name="landshrine">
+		<animation id="0" name="idle_off" length="0" looping="false">
+			<mainline>
+				<key id="0" time="0">
+					<object_ref abs_a="1.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="0" key="0" name="idle_off" timeline="0" z_index="0"/>
+				</key>
+			</mainline>
+			<timeline id="0" name="shrine">
+				<key id="0" spin="0" time="0">
+					<object angle="0" a="1.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+			</timeline>
+		</animation>
+		<animation id="1" name="idle_on" length="0" looping="false">
+			<mainline>
+				<key id="0" time="0">
+					<object_ref abs_a="1.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="1" folder="0" id="0" key="0" name="idle_on" timeline="0" z_index="0"/>
+				</key>
+			</mainline>
+			<timeline id="0" name="shrine">
+				<key id="0" spin="0" time="0">
+					<object angle="0" a="1.0" file="1" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+			</timeline>
+		</animation>
+		<animation id="2" name="place" length="198" looping="false">
+			<mainline>
+				<key id="0" time="0">
+					<object_ref abs_a="0.5" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="0.75" abs_scale_y="0.75" abs_x="0" abs_y="0" file="0" folder="0" id="0" key="0" name="place" timeline="0" z_index="0"/>
+				</key>
+				<key id="1" time="198">
+					<object_ref abs_a="1.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="1" key="1" name="place" timeline="0" z_index="0"/>
+				</key>
+			</mainline>
+			<timeline id="0" name="shrine">
+				<key id="0" spin="0" time="0">
+					<object angle="0" a="0.5" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="0.75" scale_y="0.75" x="0" y="0"/>
+				</key>
+				<key id="1" spin="0" time="198">
+					<object angle="0" a="1.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+			</timeline>
+		</animation>
+		<animation id="3" name="activate" length="297" looping="false">
+			<mainline>
+				<key id="0" time="0">
+					<object_ref abs_a="1.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="0" key="0" name="activate" timeline="0" z_index="0"/>
+				</key>
+				<key id="1" time="99">
+					<object_ref abs_a="0.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="1" key="1" name="activate" timeline="0" z_index="0"/>
+				</key>
+				<key id="2" time="198">
+					<object_ref abs_a="0.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="1" folder="0" id="2" key="2" name="activate" timeline="0" z_index="0"/>
+				</key>
+				<key id="3" time="297">
+					<object_ref abs_a="1.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="1" folder="0" id="3" key="3" name="activate" timeline="0" z_index="0"/>
+				</key>
+			</mainline>
+			<timeline id="0" name="shrine">
+				<key id="0" spin="0" time="0">
+					<object angle="0" a="1.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+				<key id="1" spin="0" time="99">
+					<object angle="0" a="0.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+				<key id="2" spin="0" time="198">
+					<object angle="0" a="0.0" file="1" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+				<key id="3" spin="0" time="297">
+					<object angle="0" a="1.0" file="1" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+			</timeline>
+		</animation>
+		<animation id="4" name="hit_off" length="198" looping="false">
+			<mainline>
+				<key id="0" time="0">
+					<object_ref abs_a="1.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="0" key="0" name="hit_off" timeline="0" z_index="0"/>
+				</key>
+				<key id="1" time="66">
+					<object_ref abs_a="1.0" abs_angle="-4" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="1" key="1" name="hit_off" timeline="0" z_index="0"/>
+				</key>
+				<key id="2" time="132">
+					<object_ref abs_a="1.0" abs_angle="4" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="2" key="2" name="hit_off" timeline="0" z_index="0"/>
+				</key>
+				<key id="3" time="198">
+					<object_ref abs_a="1.0" abs_angle="0" abs_pivot_x="0.5" abs_pivot_y="1.0" abs_scale_x="1.0" abs_scale_y="1.0" abs_x="0" abs_y="0" file="0" folder="0" id="3" key="3" name="hit_off" timeline="0" z_index="0"/>
+				</key>
+			</mainline>
+			<timeline id="0" name="shrine">
+				<key id="0" spin="0" time="0">
+					<object angle="0" a="1.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+				<key id="1" spin="0" time="66">
+					<object angle="-4" a="1.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+				<key id="2" spin="0" time="132">
+					<object angle="4" a="1.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+				<key id="3" spin="0" time="198">
+					<object angle="0" a="1.0" file="0" folder="0" pivot_x="0.5" pivot_y="1.0" scale_x="1.0" scale_y="1.0" x="0" y="0"/>
+				</key>
+			</timeline>
+		</animation>
+	</entity>
+</spriter_data>

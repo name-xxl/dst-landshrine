@@ -13,10 +13,15 @@
 
 ```
 landshrine/
-├── modinfo.lua                          mod 信息 + 两个配置项
-├── modmain.lua                          注册 prefab / replica / 配方 / 上香动作 / 调试入口
+├── modinfo.lua                          mod 信息 + 三个配置项
+├── modmain.lua                          注册 prefab / replica / 科技树 / 配方 / 动作 / RPC（仅 mod 环境调用）
 ├── scripts/
-│   ├── landshrine_config.lua            ★ 地形白名单、配方、规则（改数值只改这里）
+│   ├── landshrine_config.lua            ★ 地形白名单、配方、数值与名字常量、规则（改数值只改这里）
+│   ├── landshrine_slots.lua             纯逻辑：槽位白名单解析 + 占用槽字符串协议（可离线测试）
+│   ├── landshrine_util.lua              跨端查询工具（找庙图标、传送门禁、取网络组件）
+│   ├── landshrine_strings.lua           全部显示文本（名称 / 配方描述 / 动作 / 失败台词）
+│   ├── landshrine_debug.lua             控制台调试入口 LandShrineDebug
+│   ├── landshrine_test.lua              游戏内场景测试 LandShrineTest.RunAll()
 │   ├── prefabs/
 │   │   ├── landshrine.lua               土地庙本体 + 放置器（含客户端红绿校验）
 │   │   └── landshrine_portablemap.lua   随身地图道具（庙旁商店配方产出）
@@ -28,8 +33,24 @@ landshrine/
 │       └── landshrinesync_replica.lua   客机：读取「已占用的地形槽」小表
 └── tools/
     ├── lua_check.py                     无 Lua 环境时的语法结构 + 环境自检脚本
-    └── install_dev_link.py              可选的开发用目录联接工具（会写入游戏目录）
+    └── test/                            离线单元测试（本机 Lua 5.1 运行，不需要游戏）
+        ├── run_tests.cmd                双击运行（解释器路径写死在文件里，按本机改）
+        ├── run_tests.lua                运行器：注册 / 断言 / 汇总
+        ├── test_slots.lua               槽位协议与白名单解析
+        └── test_config.lua              建造校验规则的各分支
 ```
+
+### 离线单元测试
+
+纯逻辑模块（`landshrine_slots`、`landshrine_config`）不碰游戏全局，可用本机 Lua 5.1
+直接测试（任意绿色版解释器即可；不在 PATH 时先 `set LUA_EXE=解释器路径`）：
+
+```
+landshrine\tools\test\run_tests.cmd
+```
+
+新增测试：在 `tools/test/` 加 `test_xxx.lua`（用全局 `T.test/T.ok/T.eq`），
+并把文件名加进 `run_tests.lua` 的 `TEST_FILES`。
 
 ### ⚠ 改代码前必读：两个运行环境的区别
 
@@ -68,32 +89,21 @@ modmain 裸用原版全局名）。
 mod 必须位于游戏安装目录的 `mods/` 下才会被识别。**做法：把 `landshrine` 整个文件夹复制到**
 
 ```
-D:\SteamLibrary\steamapps\common\Don't Starve Together\mods\
+<你的 Steam 库>\steamapps\common\Don't Starve Together\mods\
 ```
 
 即得到 `...\mods\landshrine\modinfo.lua` 这样的结构。
 
 > 注意是**复制**而不是剪切/移动：移动会把工作目录里的源码搬走，之后改代码就没有源头了。
-> 想让"改完立即生效"，用下面的开发用目录联接，或者每次改完重新复制一遍。
+> 开发期改完代码想生效，重新复制一遍即可；正式发布后玩家走 Steam 创意工坊在线更新，
+> 不需要在玩家机器上做任何目录操作。
 
 然后在游戏里启用：
 
 1. **先重启游戏**（饥荒只在启动时扫描 `mods` 目录，运行中新建的文件夹不会出现在列表里）。
 2. 主菜单 → **模组** → 切到 **「服务器模组」** 标签页（本 mod 的 `client_only_mod = false`，所以归在服务器模组，不在「客户端模组」页）→ 找到「土地庙传送」→ **启用** → **应用**。
 3. 服务器模组是**跟着存档保存**的：新建世界时在创建流程的模组页勾选即可；建议**用新档测试**（旧档没有地形槽位相关的数据）。
-4. 因为 mod 含客户端逻辑（`all_clients_require_mod = true`），联机时**所有客户端都要有这个 mod**。本地 mod 不会自动下载，别人也得拿到这个文件夹（或以后发布到创意工坊）。
-
-### 可选：开发用目录联接（会写入游戏目录，需你自行执行）
-
-如果嫌反复复制麻烦，可以让工作目录直接接到游戏里（改代码立即生效）：
-
-```
-python "D:\My_APP\cherry\work\mod\landshrine\tools\install_dev_link.py"           # 创建联接
-python "D:\My_APP\cherry\work\mod\landshrine\tools\install_dev_link.py" --status  # 查看状态
-python "D:\My_APP\cherry\work\mod\landshrine\tools\install_dev_link.py" --remove  # 移除联接
-```
-
-注意这个脚本会**在你的游戏安装目录里创建/删除一个联接**（等价于 `mklink /J`），属于工作目录之外的改动，按需自己执行。脚本有安全约束：目标路径已存在且不是指向本 mod 的联接时会拒绝操作，不会删你的东西。
+4. 因为 mod 含客户端逻辑（`all_clients_require_mod = true`），联机时**所有客户端都要有这个 mod**。本地 mod 不会自动下载，别人也得拿到这个文件夹；发布到创意工坊后则由 Steam 自动分发与更新。
 
 ### 出问题时看日志
 
@@ -115,7 +125,7 @@ mod 里所有关键路径都带 `[土地庙]` 前缀输出，直接搜这个关�
 
 ## 2.5 原版脚本参考
 
-查原版机制用的解包脚本树在工作目录的 [`../原版脚本参考/`](../原版脚本参考/)，设计稿和代码里的所有「原版依据（文件:行号）」都指向它。
+查原版机制用的解包脚本树在工作目录的 [`../原版脚本参考/`](../原版脚本参考/)（约 279MB，**不随本仓库分发**，需自行解包原版 `scripts.zip`）；设计稿和代码里的所有「原版依据（文件:行号）」都指向它。
 
 ## 3. 配置项
 
@@ -282,7 +292,9 @@ c_give("landshrine_portablemap")    -- 直接拿一张随身地图（跳过配�
 - 制作栏图标暂时借用原版「肉块雕像」的图标；小地图图标暂时借用原版骑士神庙的图标；随身地图的物品/配方图标
   暂借原版「指南针」，商店站图标暂借原版奖品摊位；正式美术待补。
 - 上香动作借用了原版「递东西」的角色动作，后续换成专属上香动作。
-- 场景外观复用原版 2026 骑士神庙（`yoth_knightshrine`）的动画资源，激活前后有 `place / idle_off / activate / idle_on / hit_off` 的区分。
+- 场景外观已替换为**自制美术**（`anim/landshrine.zip`，未激活/已激活双态 + place/activate/hit 动画）；
+  建庙配方图标已自制并接线（见 §9 美术管线）。
+  仍为占位：小地图图标、随身地图物品图标、商店站钉栏图标、modicon；上香动作仍借用"递东西"。
 - 尚未处理拆庙时的「其他人把它当作传送目的地」这类交互（等传送做完再一起处理）。
 
 ## 7. 自检脚本
@@ -303,7 +315,7 @@ python tools/lua_check.py .
    （如 `NoHoles`、`ArriveAnywhere`）——这类错误会抛 `variable 'X' is not declared`，
    而且往往发生在动作链内部，表现为玩家卡住然后掉线。
 
-第 3、4 条靠扫描 `../原版脚本参考/scripts` 建立符号表来判定（4095 个文件；约 3.7 万个"只以 local
+第 3、4 条靠扫描 `../原版脚本参考/scripts`（该目录不随本仓库分发，需自行解包原版脚本）建立符号表来判定（4095 个文件；约 3.7 万个"只以 local
 存在"的名字、约 4800 个原版全局名、约 100 个 mod 环境名字），结果缓存在 `tools/vanilla_symbols.json`，
 之后每次运行都是秒出。原版更新后重建：
 
@@ -314,10 +326,69 @@ python tools/lua_check.py . --rebuild-symbols
 ## 8. 发布前清单（还没做，先记着）
 
 - [ ] 关掉调试项「调试：任意位置可建」（或直接从 modinfo 里删掉）
-- [ ] 建庙/随身地图的正式材料数值（现在是开发期占位值，见 `landshrine_config.lua`）
-- [ ] 自制土地庙美术 + 两张小地图图标（未激活/已激活），替换现在借用的骑士神庙资源
-- [ ] 制作栏图标（现在借用原版肉块雕像的图标）
-- [ ] 随身地图物品图标/配方图标 + 商店站图标（现在借用指南针与奖品摊位）
+- [ ] 建庙/随身地图的正式材料数值（开发期占位中；已讨论提案：庙 = 草8木4石6，随身地图 = 金2纸莎草4齿轮1）
+- [x] 自制土地庙建筑动画（已接入，见 §9）
+- [x] 建庙配方图标（自制，images/inventoryimages.xml 图集，modmain 已接线）
+- [x] 随身地图物品/配方图标 + 商店站钉栏图标（自制，同一图集，已接线；世界模型仍借用指南针动画）
+- [x] 小地图图标双态（minimap/landshrine_off|on.png，未激活灰暗/已激活点亮，组件里自动切换）
+- [x] modicon（modicon.tex/xml，modinfo 已接线）
 - [ ] 上香换成专属角色动作（现在是借用的「递东西」）
 - [ ] 本地化：`STRINGS` 目前只有中文一份
-- [ ] modicon（现在没有，模组列表里显示空白图标）
+## 9. 自制美术管线（动画已接入）
+
+### 建筑动画（已完成）
+
+- **源图**：`../art_src/shrine_off.png`、`shrine_on.png`（2048×2048，两态同构图，AI 生成）
+  （未激活态另有两个中间版本：`shrine_off_whitebg.png` 白底未抠图、`shrine_off_cutout_rough.png` 已抠图但没抠干净）
+- **导出**：按两图**联合边界**统一裁切（切记不能用各自 bbox，否则切状态会跳位）→
+  `exported/landshrine/shrine/shrine_off.png` / `shrine_on.png`（632×600，同画布）
+- **打包**：`../art_src/pack_anim.py` 直接构造 json 数据 → `anim/landshrine.zip`，
+  动画名契约 `place / idle_off / activate / idle_on / hit_off`，bank/build 均为 `landshrine`
+- **工具**（均为第三方工具，不随本仓库分发，出处与致谢见 §10）：DSTModTool
+  （Python：打包/反解/tex 转换/图标图集）、DST Mod Tools（GUI 动画编辑器：可视化精修/换皮/重算碰撞，
+  支持 CLI Lua IPC，自带 AI Agent 使用指南，可 `--help` 导出）
+- **踩坑记录**：
+  * 原版 `scml.exe` 会**静默丢弃**它不喜欢的动画（原因不明，勿用；用 DSTModTool）
+  * 打包坐标约定：**负 y = 地面上方**，帧率 30，build/anim 帧 y 都取负
+    （如 600px 高的内容 y=-300）。符号错一格的表现是"**看得见但点不到**"——
+    鼠标拾取包围盒跑到地下，渲染却正常。改完务必用反解对照原版数据校验符号
+  * 物品图标图集：组件字段是 `inventoryitem.atlasname`（联网同步给客户端），
+    写成 `.atlas` 是无效字段——表现为"制作成功但物品栏格子是空的"，
+    日志里刷 `Could not find region ... from atlas 'images/inventoryimages4.xml'`
+  * 小地图图标：mod 必须在 modmain 里 `AddMinimapAtlas("minimap/xxx.xml")` 注册图集，
+    原版 `Asset("MINIMAP_IMAGE", ...)` 是打进引擎图集的，mod 散装 png 不生效；
+    图集区域名要带 `.png` 后缀，与 `MiniMapEntity:SetIcon("xxx.png")` 精确对应
+  * 小地图图标尺寸：地图上绘制大小跟随图集元素像素尺寸。原版规范是**通用图标 63×63**
+    （minimap_atlas.tex 里 428 个图标全此尺寸；例外都是刻意放大的地标：月风暴标记 511、
+    裂隙门 255、船桅/海洋树 127）。我们初版用 128×128，地图上比原版图标大一倍。
+    现行 landshrine.tex = 128×64 画布，两个 64 格各放 63×63 内容、格间留 1px 透明
+    防 DXT 渗色；重生成：缩 png → png_to_tex（见 tools/DSTModTool），xml 同步改 u/v
+  * 穿雾地图图标：原版 `TrackEntity` 不传 icon 参数时会 `CopyIcon(target.MiniMapEntity)`——
+    把目标**当时**的图标做一次性快照拷贝，之后不会跟着变。所以切换实体地图图标必须
+    先切好本体图标再 TrackEntity，或显式传 icon / 在其后重设，否则穿雾图标会被拷成旧态
+    （本次"已激活庙在视野外显示灰色未点亮"即此因：`SyncActivated` 先 SpawnMapIcon 后切 on）
+
+### 图标（待补，画好 png 即可，转换管路已验证）
+
+| 美术 | 规格 | 去处 |
+|---|---|---|
+| 建庙配方图标 | 任意方形 png（自动缩 64×64） | 文件夹命名含 `inventoryimages` → 自动出 tex+xml，元素名=文件名 |
+| 随身地图图标 | 同上（文件名 `landshrine_portablemap`） | 同上 |
+| 商店站钉栏图标 | png（打包缩至 **255×255**，原版站图标规范） | 独立图集 `images/station_icons.tex+xml`，`AddPrototyperDef.icon_atlas` 指向它 |
+| modicon | 256×256 方形 | 出 tex+xml 放 mod 根目录，modinfo 补 `icon_atlas`/`icon` |
+| 小地图图标 ×2 | png 源图任意方形（打包缩至 **63×63**） | `minimap/` 目录出 tex+xml，`AddMinimapAtlas` 注册 |
+
+命名约定：`landshrine` / `landshrine_portablemap` / `station_landshrine` / `landshrine_off` / `landshrine_on`，
+与代码引用一一对应。
+
+## 10. 第三方工具与致谢
+
+本 mod 的美术与动画管线用到以下第三方工具，感谢各自的作者：
+
+| 工具 | 用途 | 出处 |
+|---|---|---|
+| **DST Mod Tools**（Tauri GUI 动画编辑器，本机版本 dst-app v1.2.0） | 动画可视化精修 / 换皮 / 重算碰撞；自带 Lua API 与 CLI IPC，可脚本化编辑与导出 | 作者 [MSIsunny](https://github.com/MSIsunny)（Han）· [发布页](https://msisunny.github.io/dst-mod-tool-publisher/) · [Klei 论坛发布帖](https://forums.kleientertainment.com/forums/topic/167735-new-dst-animation-and-texture-tool/) |
+| **DSTModTool**（Python 命令行工具集：动画打包/反解、tex↔png、图标图集） | `art_src/` 与 `landshrine/` 的 anim、images、minimap 打包与转换 | 原作者 Jerry457（原仓库已删除，本机为留档副本）；整合修改自 [dyn_decrypt](https://github.com/UNOWEN-OwO/dyn_decrypt)、[ktools](https://github.com/nsimplex/ktools)、[Klei 官方 ds_mod_tools](https://github.com/kleientertainment/ds_mod_tools)；依赖 Python 3.11 + Pillow |
+| **即梦（Jimeng）AI 绘画** | `art_src/` 中的美术源图 | PNG 内嵌 AIGC 标识元数据可见 |
+
+> 以上工具均**不随本仓库分发**，请至上表出处获取。

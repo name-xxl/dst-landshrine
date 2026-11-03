@@ -1,0 +1,8 @@
+<Atlas>
+	<Texture filename="inventoryimages.tex" />
+	<Elements>
+		<Element name="landshrine.tex" u1="0.000000" v1="0.000000" u2="0.250000" v2="1.000000" />
+		<Element name="landshrine_portablemap.tex" u1="0.250000" v1="0.000000" u2="0.500000" v2="1.000000" />
+		<Element name="station_landshrine.tex" u1="0.500000" v1="0.000000" u2="0.750000" v2="1.000000" />
+	</Elements>
+</Atlas>

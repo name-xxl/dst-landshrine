@@ -1,23 +1,37 @@
 --[[
     土地庙传送 —— 主入口
-    已实现：按地形建造（每种地形一座）、上香激活、地图点选传送
-    尚未实现：随身地图、跨分片
+    已实现：按地形建造（每种地形一座）、上香激活、地图点选传送、随身地图
+    尚未实现：跨分片
+
+    本文件只做「必须在 mod 环境执行」的注册（AddAction / AddRecipe2 / RPC / PostInit 等）；
+    数值与规则在 scripts/landshrine_config.lua，跨端查询工具在 scripts/landshrine_util.lua，
+    文本在 scripts/landshrine_strings.lua，控制台调试入口在 scripts/landshrine_debug.lua。
 ]]
 
 local require = GLOBAL.require
 
 PrefabFiles = { "landshrine", "landshrine_portablemap" }
 
--- 预加载占位神庙的动画资源（放置器是客户端实体，可能会先于土地庙出现）
+-- 预加载土地庙的动画资源（放置器是客户端实体，可能会先于土地庙出现）
 Assets = {
-    Asset("ANIM", "anim/yoth_knightshrine.zip"),
+    Asset("ANIM", "anim/landshrine.zip"),
+    Asset("ATLAS", "images/inventoryimages.xml"), -- 自制图标图集（建庙配方等）
+    Asset("IMAGE", "images/inventoryimages.tex"),
+    Asset("ATLAS", "images/station_icons.xml"),   -- 商店站钉栏图标（原版规范 255x255，见 AddPrototyperDef）
+    Asset("IMAGE", "images/station_icons.tex"),
+    Asset("IMAGE", "minimap/landshrine.tex"),     -- 自制小地图图标图集
+    Asset("ATLAS", "minimap/landshrine.xml"),
 }
+
+-- 小地图图标图集必须显式注册（原版 MINIMAP_IMAGE 是打进引擎图集的，mod 散 png 不生效）
+AddMinimapAtlas("minimap/landshrine.xml")
 
 -- 让客机也能拿到土地庙的激活状态、以及「已被占用的地形槽」小表
 AddReplicableComponent("landshrine")
 AddReplicableComponent("landshrinesync")
 
 local LandShrineConfig = require("landshrine_config")
+local LandShrineUtil = require("landshrine_util")
 
 --------------------------------------------------------------------------
 -- 把配置模块需要的依赖注入进去。
@@ -64,14 +78,7 @@ LandShrineConfig:Init({
 --   插入之后创建的配方走 TechTree.Create 会自动带上，不需要回填。
 --------------------------------------------------------------------------
 local TechTree = GLOBAL.require("techtree")
-local tech_registered = false
-for _, v in ipairs(TechTree.AVAILABLE_TECH) do
-    if v == "LANDSHRINE" then
-        tech_registered = true
-        break
-    end
-end
-if not tech_registered then
+if not table.contains(TechTree.AVAILABLE_TECH, "LANDSHRINE") then
     table.insert(TechTree.AVAILABLE_TECH, "LANDSHRINE")
 
     local all_recipes = GLOBAL.AllRecipes
@@ -88,44 +95,27 @@ GLOBAL.TECH.LANDSHRINE_ONE = { LANDSHRINE = 1 }
 GLOBAL.TUNING.PROTOTYPER_TREES.LANDSHRINE = TechTree.Create({ LANDSHRINE = 1 })
 
 AddPrototyperDef("landshrine", {
-    icon_atlas = "images/crafting_menu_icons.xml",
-    icon_image = "station_prizebooth.tex", -- 占位图标（原版奖品摊位），后续替换为自制贴图
+    icon_atlas = "images/station_icons.xml",
+    icon_image = "station_landshrine.tex", -- 自制站图标（255x255：钉栏按原生素材尺寸渲染，64 格会只有原版 1/4 大小）
     is_crafting_station = true,
     action_str = "TRADE",
     filter_text = "土地庙",
 })
 
 --------------------------------------------------------------------------
--- 文本
+-- 文本（全部文案集中在 scripts/landshrine_strings.lua）
 --------------------------------------------------------------------------
-GLOBAL.STRINGS.NAMES.LANDSHRINE = "土地庙"
-GLOBAL.STRINGS.RECIPE_DESC.LANDSHRINE = "每种地形只能建一座。上香之后才能使用。"
-GLOBAL.STRINGS.NAMES.LANDSHRINE_PORTABLEMAP = "随身地图"
-GLOBAL.STRINGS.RECIPE_DESC.LANDSHRINE_PORTABLEMAP = "带着它，随时随地都能缩地回庙。"
-GLOBAL.STRINGS.ACTIONS.LAND_SHRINE_WORSHIP = "上香"
-GLOBAL.STRINGS.ACTIONS.LAND_SHRINE_TELEPORT_MAP = "传送"
-GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.LANDSHRINE = "一座小小的土地庙。"
-GLOBAL.STRINGS.CHARACTERS.GENERIC.DESCRIBE.LANDSHRINE_PORTABLEMAP = "土地爷给的行旅图。"
-
-for _, speech in pairs(GLOBAL.STRINGS.CHARACTERS) do
-    if speech.ACTIONFAIL ~= nil then
-        speech.ACTIONFAIL.LANDSHRINE_TERRAIN = "这地方不适合建土地庙。"
-        speech.ACTIONFAIL.LANDSHRINE_TAKEN = "这种地形已经有一座土地庙了。"
-        speech.ACTIONFAIL.LANDSHRINE_ALREADY = "这座土地庙已经上过香了。"
-        speech.ACTIONFAIL.LANDSHRINE_TOOFAR = "离土地庙太远了。"
-        speech.ACTIONFAIL.LANDSHRINE_NOTATSHRINE = "得站在土地庙旁边，或带着随身地图才能缩地。"
-        speech.ACTIONFAIL.LANDSHRINE_NOTARGET = "那座土地庙去不了。"
-        speech.ACTIONFAIL.LANDSHRINE_BLOCKED = "这里过不去。"
-        speech.ACTIONFAIL.LANDSHRINE_NOSPACE = "对面站不下人。"
-    end
-end
+require("landshrine_strings").Apply()
 
 --------------------------------------------------------------------------
 -- 配方（材料数值后置，开发期用便于获取的材料）
 --------------------------------------------------------------------------
-local shrine_ingredients = {}
-for _, v in ipairs(LandShrineConfig.SHRINE_INGREDIENTS) do
-    table.insert(shrine_ingredients, Ingredient(v[1], v[2]))
+local function MakeIngredients(list)
+    local ingredients = {}
+    for _, v in ipairs(list) do
+        table.insert(ingredients, Ingredient(v[1], v[2]))
+    end
+    return ingredients
 end
 
 -- 服务端权威校验：在扣材料之前被 builder:DoBuild 调用
@@ -141,7 +131,7 @@ local function CanBuildLandShrine(recipe, builder, pt, rotation, station, skin)
         return true
     end
 
-    local net = GLOBAL.TheWorld ~= nil and GLOBAL.TheWorld.components.landshrinenetwork or nil
+    local net = LandShrineUtil.GetNetworkComponent()
     local isoccupied = function(key)
         return net ~= nil and net:IsKeyOccupied(key)
     end
@@ -149,10 +139,11 @@ local function CanBuildLandShrine(recipe, builder, pt, rotation, station, skin)
     return LandShrineConfig:ValidateBuildPoint(pos.x, pos.z, isoccupied)
 end
 
-AddRecipe2("landshrine", shrine_ingredients, GLOBAL.TECH.NONE, {
+AddRecipe2("landshrine", MakeIngredients(LandShrineConfig.SHRINE_INGREDIENTS), GLOBAL.TECH.NONE, {
     placer = "landshrine_placer",
     min_spacing = 2,
-    image = "resurrectionstatue.tex", -- 占位图标（原版肉块雕像的图标），后续替换为自制贴图
+    image = "landshrine.tex", -- 自制图标（images/inventoryimages.xml 图集）
+    atlas = "images/inventoryimages.xml",
     canbuild = CanBuildLandShrine,
 }, { "STRUCTURES" })
 
@@ -162,15 +153,11 @@ AddRecipe2("landshrine", shrine_ingredients, GLOBAL.TECH.NONE, {
 -- 不会出现在常驻的 MODS 分类里
 --------------------------------------------------------------------------
 if LandShrineConfig.portablemap_enabled then
-    local portablemap_ingredients = {}
-    for _, v in ipairs(LandShrineConfig.PORTABLEMAP_INGREDIENTS) do
-        table.insert(portablemap_ingredients, Ingredient(v[1], v[2]))
-    end
-
-    AddRecipe2("landshrine_portablemap", portablemap_ingredients, GLOBAL.TECH.LANDSHRINE_ONE, {
+    AddRecipe2("landshrine_portablemap", MakeIngredients(LandShrineConfig.PORTABLEMAP_INGREDIENTS), GLOBAL.TECH.LANDSHRINE_ONE, {
         nounlock = true,
         sg_state = "give",
-        image = "compass.tex", -- 占位图标（原版指南针），后续替换为自制贴图
+        image = "landshrine_portablemap.tex", -- 自制图标（images/inventoryimages.xml 图集）
+        atlas = "images/inventoryimages.xml",
     })
 end
 
@@ -193,7 +180,7 @@ AddPlayerPostInit(function(inst)
 
     -- 玩家出现 / 重连后主动拉一次占用表（覆盖房主与后加入的玩家）
     inst:DoTaskInTime(0, function()
-        local net = GLOBAL.TheWorld ~= nil and GLOBAL.TheWorld.components.landshrinenetwork or nil
+        local net = LandShrineUtil.GetNetworkComponent()
         if net ~= nil then
             net:PushToPlayer(inst)
         end
@@ -201,55 +188,9 @@ AddPlayerPostInit(function(inst)
 end)
 
 --------------------------------------------------------------------------
--- 缩地的共用工具（放在上香动作之前：上香完成后要顺手调用它们把地图打开）
---------------------------------------------------------------------------
-local TELEPORT_FROM_RADIUS = 12   -- 玩家周围多大范围内有已激活的庙，才算"站在庙旁"
-local MAP_TARGET_RADIUS = 8       -- 地图光标离庙图标多近算点中
-
-local function FindLandShrineIconAt(x, z)
-    -- 已激活的庙会在地图上挂一个 landshrineicon 图标实体（跟随庙、穿雾可见）
-    return GLOBAL.TheSim:FindEntities(x, 0, z, MAP_TARGET_RADIUS, { "CLASSIFIED", "landshrineicon" })[1]
-end
-
-local function IsAtActivatedShrine(player, radius)
-    if player == nil or not player:IsValid() then
-        return false
-    end
-
-    local world = GLOBAL.TheWorld
-    local net = world ~= nil and world.components.landshrinenetwork or nil
-    if net ~= nil then
-        -- 服务端：查注册表（便宜且权威）
-        return net:IsPlayerAtActivatedShrine(player, radius)
-    end
-
-    -- 客机：看附近的庙，读 replica 的激活状态
-    local x, y, z = player.Transform:GetWorldPosition()
-    for _, v in ipairs(GLOBAL.TheSim:FindEntities(x, 0, z, radius, { "landshrine" }, { "INLIMBO" })) do
-        local replica = v.replica.landshrine
-        if replica ~= nil and replica:IsActivated() then
-            return true
-        end
-    end
-    return false
-end
-
--- 随身地图：带着它就不必站在庙旁（连背包里也算）
-local function HasPortableMap(player)
-    if player == nil or not player:IsValid() then
-        return false
-    end
-    local inventory = player.replica.inventory
-    return inventory ~= nil and inventory:Has("landshrine_portablemap", 1, true)
-end
-
--- 可以发起缩地的条件：站在已激活的庙旁，或身上带着随身地图
-local function CanStartTeleport(player)
-    return IsAtActivatedShrine(player, TELEPORT_FROM_RADIUS) or HasPortableMap(player)
-end
-
 -- 打开世界地图（客户端）。条件与守卫照原版按 M 键开图那条路抄。
 -- 带重试：刚做完动作时控制器可能被临时禁用（IsMapControlsEnabled 为 false），过一会儿再来。
+--------------------------------------------------------------------------
 local function TryOpenLandShrineMap(player, attempts)
     if player == nil or not player:IsValid() or player.HUD == nil or GLOBAL.TheFrontEnd == nil then
         return
@@ -331,7 +272,7 @@ local function DoLandShrineWorship(act)
     -- 「已激活时自动开图」不在这里做——由服务端 DoWorship 判定成功后用模组 RPC 通知客户端，
     -- 见上面 openshrinemap 那条链路（服务端才真正知道这次上香发生了什么）。
     local replica = target.replica.landshrine
-    return replica ~= nil and doer:IsNear(target, 4)
+    return replica ~= nil and doer:IsNear(target, LandShrineConfig.WORSHIP_RADIUS)
 end
 
 AddAction("LAND_SHRINE_WORSHIP", "上香", DoLandShrineWorship)
@@ -365,7 +306,6 @@ AddStategraphActionHandler("wilson_client", GLOBAL.ActionHandler(GLOBAL.ACTIONS.
 -- 客户端状态负责 locomotor:Stop() + FlattenMovementPrediction() ——
 -- 这是被预测的客户端接受服务端传送后位置、丢弃预测状态的标准机制；
 -- instant 动作绕过状态机，正是之前"传送后走回原地"的结构性根因。
---（常量、图标查找与地图开关等共用件在本文件更上面）
 --------------------------------------------------------------------------
 local function DoLandShrineMapTeleport(act)
     local player = act.doer
@@ -374,19 +314,19 @@ local function DoLandShrineMapTeleport(act)
     end
 
     -- 1) 硬规则：站在已激活的土地庙旁发起，或身上带着随身地图
-    if not CanStartTeleport(player) then
+    if not LandShrineUtil.CanStartTeleport(player) then
         print("[土地庙] 传送被拒：不在已激活的土地庙旁，且没有随身地图")
         return false, "LANDSHRINE_NOTATSHRINE"
     end
 
-    -- 2) 目标 = 动作点附近那座图标所跟踪的庙（只有服务端能读到 _target）
+    -- 2) 目标 = 动作点附近那座图标所跟踪的庙（只有服务端能读到）
     local pos = act:GetActionPoint()
     if pos == nil then
         return false, "LANDSHRINE_NOTARGET"
     end
 
-    local icon = FindLandShrineIconAt(pos.x, pos.z)
-    local target = icon ~= nil and icon._target or nil
+    local icon = LandShrineUtil.FindLandShrineIconAt(pos.x, pos.z)
+    local target = LandShrineUtil.GetShrineFromMapIcon(icon)
     if target == nil or not target:IsValid() then
         print(string.format("[土地庙] 传送被拒：动作点 (%.1f, %.1f) 附近没有土地庙图标", pos.x, pos.z))
         return false, "LANDSHRINE_NOTARGET"
@@ -397,7 +337,7 @@ local function DoLandShrineMapTeleport(act)
         return false, "LANDSHRINE_NOTARGET"
     end
 
-    local net = GLOBAL.TheWorld.components.landshrinenetwork
+    local net = LandShrineUtil.GetNetworkComponent()
     if net == nil then
         return false, "LANDSHRINE_NOTARGET"
     end
@@ -424,7 +364,7 @@ teleport_map_action.maponly_checkvalidpos_fn = function(act)
         return false
     end
 
-    local icon = FindLandShrineIconAt(pos.x, pos.z)
+    local icon = LandShrineUtil.FindLandShrineIconAt(pos.x, pos.z)
     if icon == nil then
         return false, "LANDSHRINE_NOTARGET"
     end
@@ -454,11 +394,11 @@ AddComponentPostInit("playercontroller", function(self)
         end
 
         local player = _self.inst
-        if not CanStartTeleport(player) then
+        if not LandShrineUtil.CanStartTeleport(player) then
             return lmb, rmb
         end
 
-        if FindLandShrineIconAt(position.x, position.z) == nil then
+        if LandShrineUtil.FindLandShrineIconAt(position.x, position.z) == nil then
             return lmb, rmb
         end
 
@@ -468,121 +408,8 @@ AddComponentPostInit("playercontroller", function(self)
 end)
 
 --------------------------------------------------------------------------
--- 调试入口（控制台执行，注意要切到「远程：」）
---   LandShrineDebug.Summary()       查看已登记的土地庙与占用的地形槽
---   LandShrineDebug.ActivateAll()   激活全部土地庙
---   LandShrineDebug.RemoveNearest() 拆掉离自己最近的土地庙（释放地形槽，不需要锤子）
---   LandShrineDebug.ClearSlots()    解除全部槽位注册（本次会话内可重复建）
---   LandShrineDebug.TestBuild()     绕过客户端红绿判定，直接在服务端尝试建造一次
---                                   —— 用来验证「服务端拒绝且不扣材料」
---   LandShrineDebug.TestTeleport()  绕过地图界面直接传送一次（隔离"传送逻辑"与"地图 UI"）
---
--- 远程执行的 print 只会写进服务端日志、屏幕上看不到，所以这里同时用
--- TheNet:Announce 把结果播到聊天栏，方便在游戏里直接看到。
+-- 调试与游戏内场景测试（控制台执行，注意要切到「远程：」；
+-- 命令清单见 scripts/landshrine_debug.lua 与 scripts/landshrine_test.lua 的头注释）
 --------------------------------------------------------------------------
-local function Report(msg)
-    print(msg)
-    if GLOBAL.TheNet ~= nil and GLOBAL.TheNet:GetIsServer() then
-        GLOBAL.TheNet:Announce(msg)
-    end
-end
-
-local function GetNetwork()
-    return GLOBAL.TheWorld ~= nil and GLOBAL.TheWorld.components.landshrinenetwork or nil
-end
-
-GLOBAL.LandShrineDebug = {
-    Summary = function()
-        local net = GetNetwork()
-        Report(net ~= nil and net:GetDebugString() or "[土地庙] 当前不是主机，或网络组件不存在")
-    end,
-
-    ClearSlots = function()
-        local net = GetNetwork()
-        if net ~= nil then
-            Report(string.format("[土地庙] 已解除 %d 座土地庙的槽位注册（仅本次会话有效）", net:DebugUnregisterAll()))
-        else
-            Report("[土地庙] 当前不是主机，或网络组件不存在")
-        end
-    end,
-
-    ActivateAll = function()
-        local net = GetNetwork()
-        if net ~= nil then
-            Report(string.format("[土地庙] 已激活 %d 座土地庙", net:DebugActivateAll()))
-        else
-            Report("[土地庙] 当前不是主机，或网络组件不存在")
-        end
-    end,
-
-    -- 徒手拆除最近的一座（包括未激活的），用于反复测试地形槽释放
-    RemoveNearest = function()
-        local net = GetNetwork()
-        local player = GLOBAL.ThePlayer
-        if net == nil or player == nil then
-            Report("[土地庙] 当前不是主机，或找不到玩家")
-            return
-        end
-
-        local shrine = net:GetNearestShrine(player)
-        if shrine == nil then
-            Report("[土地庙] 附近没有已登记的土地庙")
-            return
-        end
-
-        local comp = shrine.components.landshrine
-        local key = comp ~= nil and comp.terrainkey or nil
-        if comp ~= nil then
-            comp:DevRemove(player)
-        elseif shrine:IsValid() then
-            shrine:Remove()
-        end
-
-        Report(string.format("[土地庙] 已拆除最近的土地庙（原占用地形槽：%s）", tostring(key)))
-    end,
-
-    -- 绕过客户端判定，直接在服务端跑一次真实的建造流程：
-    -- 被拒绝时应返回"被服务端拒绝"，且材料前后都可用（证明没扣材料）
-    TestBuild = function()
-        local player = GLOBAL.ThePlayer
-        if player == nil or player.components.builder == nil then
-            Report("[土地庙] 请以玩家身份、用「远程：」模式执行这条命令")
-            return
-        end
-
-        local recipe = "landshrine"
-        local builder = player.components.builder
-        local x, y, z = player.Transform:GetWorldPosition()
-        local pos = GLOBAL.Vector3(x, 0, z)
-
-        local before = builder:HasIngredients(recipe)
-        local ok, reason = builder:DoBuild(recipe, pos, 0, nil)
-        local after = builder:HasIngredients(recipe)
-
-        Report(string.format("[土地庙] 强行建造测试：%s%s；材料可用：建造前=%s → 建造后=%s",
-            ok and "成功（已在自己脚下建了一座）" or "被服务端拒绝",
-            reason ~= nil and ("，原因 " .. tostring(reason)) or "",
-            tostring(before), tostring(after)))
-    end,
-
-    -- 绕过地图界面直接触发一次传送：用来隔离"传送逻辑"和"地图 UI"的问题
-    TestTeleport = function()
-        local net = GetNetwork()
-        local player = GLOBAL.ThePlayer
-        if net == nil or player == nil then
-            Report("[土地庙] 当前不是主机，或找不到玩家")
-            return
-        end
-
-        local shrine = net:GetNearestShrine(player)
-        if shrine == nil then
-            Report("[土地庙] 附近没有已登记的土地庙")
-            return
-        end
-
-        local ok, reason = net:TeleportPlayerToShrine(player, shrine)
-        Report(string.format("[土地庙] 传送测试：%s%s",
-            ok and "成功" or "失败",
-            reason ~= nil and ("，原因 " .. tostring(reason)) or ""))
-    end,
-}
+GLOBAL.LandShrineDebug = require("landshrine_debug")
+GLOBAL.LandShrineTest = require("landshrine_test")

@@ -1,10 +1,13 @@
 --[[
     土地庙（prefab）
-    开发期外观：借用原版骑士神庙（yoth_knightshrine）的动画资源
-      * idle_off —— 未激活（默认）
-      * activate -> idle_on —— 上香激活
-      * hit_off / place —— 被敲击 / 落成
-    正式版将替换为自制的土地庙美术，届时只需改本文件的 bank/build/anim 与 assets。
+    自制美术版动画（anim/landshrine.zip，bank/build 均为 landshrine）：
+      * idle_off —— 未激活（默认，静态单帧）
+      * idle_on —— 已激活（静态单帧）
+      * activate —— 上香激活动画（off 停留后切到 on）
+      * place —— 落成动画（缩放弹入）
+      * hit_off —— 被敲击（摇晃）
+    动画工程源文件在 exported/landshrine/landshrine.scml，
+    用 tools/DSTModTool（纯 Python 打包器）编译：见 art_src/make_scml.py。
 ]]
 
 require "prefabutil"
@@ -13,7 +16,7 @@ local LandShrineConfig = require("landshrine_config")
 
 local assets =
 {
-    Asset("ANIM", "anim/yoth_knightshrine.zip"),
+    Asset("ANIM", "anim/landshrine.zip"),
 }
 
 local prefabs =
@@ -75,13 +78,14 @@ local function OnHit(inst, worker)
 end
 
 local function OnHammered(inst, worker)
-    inst.components.lootdropper:DropLoot()
-
-    local fx = SpawnPrefab("collapse_small")
-    fx.Transform:SetPosition(inst.Transform:GetWorldPosition())
-    fx:SetMaterial("stone")
-
-    inst:Remove()
+    -- 掉材料 + 倒塌特效 + 移除的逻辑与调试拆庙共用，统一走组件；
+    -- 距离由 workable 组件把关，这里传 nil 跳过重复检查
+    local comp = inst.components.landshrine
+    if comp ~= nil then
+        comp:BreakShrine(nil)
+    else
+        inst:Remove()
+    end
 end
 
 local function OnDeconstructed(inst, data)
@@ -98,7 +102,7 @@ local function OnBuilt(inst, data)
 
     inst.AnimState:PlayAnimation("place")
     inst.AnimState:PushAnimation("idle_off", true)
-    inst.SoundEmitter:PlaySound("yoth_2026/shrine/place")
+    inst.SoundEmitter:PlaySound(LandShrineConfig.SOUND_PLACE)
 end
 
 local function fn()
@@ -113,12 +117,25 @@ local function fn()
     inst:SetDeploySmartRadius(1)
     MakeObstaclePhysics(inst, 0.6)
 
-    -- 小地图图标：暂时借用原版骑士神庙的图标，正式版替换为自制图标（未激活/已激活两张）
+    -- 小地图图标：未激活灰暗 / 已激活点亮，切换逻辑在 landshrine 组件 SyncActivated
     inst.MiniMapEntity:SetPriority(5)
-    inst.MiniMapEntity:SetIcon("yoth_knightshrine.png")
+    inst.MiniMapEntity:SetIcon(LandShrineConfig.MINIMAP_ICON_OFF)
 
-    inst.AnimState:SetBank("yoth_knightshrine")
-    inst.AnimState:SetBuild("yoth_knightshrine")
+    -- 客机侧的状态跟随：激活状态是 net_bool（见 landshrine_replica），
+    -- 服务端组件里的 SetIcon 不会同步到客机，客机必须自己监听变更切图标
+    if not TheWorld.ismastersim then
+        local ApplyMiniMapIcon = function(inst)
+            local on = inst.replica.landshrine ~= nil and inst.replica.landshrine:IsActivated()
+            inst.MiniMapEntity:SetIcon(on and LandShrineConfig.MINIMAP_ICON_ON or LandShrineConfig.MINIMAP_ICON_OFF)
+        end
+        inst:ListenForEvent(LandShrineConfig.EVENT_ACTIVATED_DIRTY, ApplyMiniMapIcon)
+        -- net_bool 的初始值不触发 dirty 事件：重进存档、或已激活的庙首次进入
+        -- 网络视野时，必须按 replica 当前值主动设一次（原版 revealable_Init 同款兜底）
+        inst:DoTaskInTime(0, ApplyMiniMapIcon)
+    end
+
+    inst.AnimState:SetBank("landshrine")
+    inst.AnimState:SetBuild("landshrine")
     inst.AnimState:PlayAnimation("idle_off", true)
 
     inst:AddTag("structure")
@@ -156,4 +173,4 @@ local function fn()
 end
 
 return Prefab("landshrine", fn, assets, prefabs),
-    MakePlacer("landshrine_placer", "yoth_knightshrine", "yoth_knightshrine", "idle_off", false, false, false, 1, nil, nil, PlacerPostInit)
+    MakePlacer("landshrine_placer", "landshrine", "landshrine", "idle_off", false, false, false, 1, nil, nil, PlacerPostInit)

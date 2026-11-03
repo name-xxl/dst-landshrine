@@ -4,6 +4,7 @@
 ]]
 
 local LandShrineConfig = require("landshrine_config")
+local LandShrineUtil = require("landshrine_util")
 
 local LandShrine = Class(function(self, inst)
     self.inst = inst
@@ -53,7 +54,7 @@ function LandShrine:Register()
         return
     end
 
-    local net = TheWorld ~= nil and TheWorld.components.landshrinenetwork or nil
+    local net = LandShrineUtil.GetNetworkComponent()
     if net == nil then
         return
     end
@@ -73,6 +74,8 @@ function LandShrine:OnRemoveFromEntity()
     self:Unregister()
 end
 
+-- 实体销毁时原版只回调组件的 OnRemoveEntity（entityscript.lua:1749，Remove 流程里
+-- 不调 OnRemoveFromEntity），这个别名是拆庙时注销地形槽的组件侧路径，勿删
 LandShrine.OnRemoveEntity = LandShrine.OnRemoveFromEntity
 
 --------------------------------------------------------------------------
@@ -84,6 +87,12 @@ function LandShrine:SyncActivated()
         replica:SetActivated(self.activated)
     end
 
+    -- 小地图图标双态：未激活灰暗 / 已激活点亮
+    -- 必须先于 SpawnMapIcon：TrackEntity 里会 CopyIcon 庙当时的图标，先切好再拷才是点亮版
+    if self.inst.MiniMapEntity ~= nil then
+        self.inst.MiniMapEntity:SetIcon(self.activated and LandShrineConfig.MINIMAP_ICON_ON or LandShrineConfig.MINIMAP_ICON_OFF)
+    end
+
     -- 未激活时不去动动画：让落成动作（place）能自然播完
     if self.activated then
         if self.inst.AnimState ~= nil then
@@ -91,6 +100,11 @@ function LandShrine:SyncActivated()
         end
         self:SpawnMapIcon()
         self:BecomeShop()
+    end
+
+    -- 一致性维护：已存在的穿雾图标始终跟随当前状态（激活目前是单向的，防御性保留）
+    if self.mapicon ~= nil and self.mapicon:IsValid() then
+        self.mapicon.MiniMapEntity:SetIcon(self.activated and LandShrineConfig.MINIMAP_ICON_ON or LandShrineConfig.MINIMAP_ICON_OFF)
     end
 end
 
@@ -120,9 +134,12 @@ function LandShrine:SpawnMapIcon()
         return
     end
 
-    self.mapicon.MiniMapEntity:SetPriority(MINIMAP_DECORATION_PRIORITY)
-    self.mapicon:AddTag("landshrineicon")   -- 客机靠这个 tag 在地图上认出土地庙
+    self.mapicon:AddTag(LandShrineConfig.TAG_MAP_ICON) -- 客机靠这个 tag 在地图上认出土地庙
     self.mapicon:TrackEntity(self.inst)     -- 跟随庙的位置；庙被拆掉时图标会自动消失
+    -- TrackEntity 未传 icon 参数时会 CopyIcon 庙当时的图标（一次性快照），
+    -- 所以点亮图标和优先级必须在它之后设置，否则会被拷成 off 版
+    self.mapicon.MiniMapEntity:SetIcon(LandShrineConfig.MINIMAP_ICON_ON)
+    self.mapicon.MiniMapEntity:SetPriority(MINIMAP_DECORATION_PRIORITY)
 end
 
 function LandShrine:SetActivated(activated)
@@ -138,7 +155,7 @@ end
 
 -- 上香：未激活 -> 已激活；已激活 -> 状态不变，只是通知玩家打开地图
 function LandShrine:DoWorship(doer)
-    if doer == nil or not doer:IsValid() or not self.inst:IsValid() or not doer:IsNear(self.inst, 4) then
+    if doer == nil or not doer:IsValid() or not self.inst:IsValid() or not doer:IsNear(self.inst, LandShrineConfig.WORSHIP_RADIUS) then
         return false, "LANDSHRINE_TOOFAR"
     end
 
@@ -160,7 +177,7 @@ function LandShrine:DoWorship(doer)
     end
 
     if self.inst.SoundEmitter ~= nil then
-        self.inst.SoundEmitter:PlaySound("yoth_2026/shrine/activate")
+        self.inst.SoundEmitter:PlaySound(LandShrineConfig.SOUND_ACTIVATE)
     end
 
     return true
@@ -168,14 +185,15 @@ end
 
 --------------------------------------------------------------------------
 
--- 调试用：徒手拆除（掉落材料并释放地形槽）。
--- 由 mod 配置项「调试：允许徒手拆除」开启后出现在右键菜单里，不需要锤子。
-function LandShrine:DevRemove(doer)
+-- 拆掉这座庙：掉落材料、播倒塌特效、移除实体（地形槽随实体销毁自动释放）。
+-- 调用方：锤子拆完（prefab OnHammered）、调试入口 LandShrineDebug.RemoveNearest。
+-- doer 传 nil 表示不做距离检查（例如锤子的距离已由 workable 组件把关）。
+function LandShrine:BreakShrine(doer)
     if not self.inst:IsValid() then
         return false
     end
 
-    if doer ~= nil and doer:IsValid() and not doer:IsNear(self.inst, 4) then
+    if doer ~= nil and doer:IsValid() and not doer:IsNear(self.inst, LandShrineConfig.WORSHIP_RADIUS) then
         return false, "LANDSHRINE_TOOFAR"
     end
 
@@ -195,8 +213,13 @@ end
 
 --------------------------------------------------------------------------
 
+-- 存档格式版本：格式变更时 +1，并在 OnLoad 里加对应的迁移分支。
+-- 已知会用到它的变更：跨分片传送落地时，地形槽 key 很可能要带分片维度。
+LandShrine.SAVE_VERSION = 1
+
 function LandShrine:OnSave()
     return {
+        version = LandShrine.SAVE_VERSION,
         activated = self.activated or nil,
         terrainkey = self.terrainkey,
     }
@@ -207,8 +230,21 @@ function LandShrine:OnLoad(data)
         return
     end
 
+    -- 存档迁移脚手架：旧档没有 version 字段视为 0，按版本逐级迁移
+    -- local version = data.version or 0
+    -- if version < 1 then ... end
+
     self.terrainkey = data.terrainkey
     self.activated = data.activated and true or false
+
+    -- 恢复激活状态的全部表现（动画、副本同步、地图图标、商店站）。
+    -- 必须延后一拍：读档流程里立刻 SpawnPrefab（穿雾图标）/ 动网络变量不可靠，
+    -- 原版组件在 OnLoad 里做视觉恢复也都是这个套路。
+    if self.activated then
+        self.inst:DoTaskInTime(0, function()
+            self:SyncActivated()
+        end)
+    end
 end
 
 --------------------------------------------------------------------------

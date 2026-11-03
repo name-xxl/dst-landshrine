@@ -1,0 +1,7 @@
+<Atlas>
+	<Texture filename="landshrine.tex" />
+	<Elements>
+		<Element name="landshrine_off.png" u1="0.000000" v1="0.000000" u2="0.492188" v2="0.984375" />
+		<Element name="landshrine_on.png" u1="0.500000" v1="0.000000" u2="0.992188" v2="0.984375" />
+	</Elements>
+</Atlas>

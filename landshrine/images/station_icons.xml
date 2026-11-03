@@ -1,0 +1,6 @@
+<Atlas>
+	<Texture filename="station_icons.tex" />
+	<Elements>
+		<Element name="station_landshrine.tex" u1="0.000000" v1="0.000000" u2="0.996094" v2="0.996094" />
+	</Elements>
+</Atlas>

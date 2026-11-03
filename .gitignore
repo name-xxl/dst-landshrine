@@ -16,3 +16,9 @@ __pycache__/
 # 本地编辑器/系统杂项
 .DS_Store
 Thumbs.db
+
+# 构建产物
+/landshrine.zip
+
+# 第三方工具与二进制（不属于本项目，出处见 landshrine/README.md §10）
+/tools/

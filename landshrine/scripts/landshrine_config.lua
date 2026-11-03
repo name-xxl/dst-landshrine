@@ -8,9 +8,12 @@
     （例如 LANDSHRINE_DEV）。需要用到的外部依赖（GROUND 表、TheWorld、日志函数、调试开关）
     一律由 modmain 在 Init() 里注入。
 
-    * 可改：ALLOWED_TERRAIN / TERRAIN_ALIASES / SHRINE_INGREDIENTS
-    * 勿改：下面的 Init 与规则逻辑
+    * 可改：ALLOWED_TERRAIN / TERRAIN_ALIASES / SHRINE_INGREDIENTS / PORTABLEMAP_INGREDIENTS
+            / 下面的数值与名字常量区
+    * 勿改：Init 与规则逻辑
 ]]
+
+local Slots = require("landshrine_slots")
 
 local Config = {}
 
@@ -55,17 +58,37 @@ Config.TERRAIN_ALIASES = {
 
 --------------------------------------------------------------------------
 -- 建造配方（开发期：便于获取；正式数值后置）
+-- 讨论过的正式提案：庙 = 草8 木4 石6；随身地图 = 金2 纸莎草4 齿轮1
 --------------------------------------------------------------------------
 Config.SHRINE_INGREDIENTS = {
     { "cutgrass", 1 },
     { "twigs", 1 },
 }
 
--- 随身地图的「购买」配方（在已激活的庙旁通过制作栏制作）
--- 正式提案：金块 × 2 + 纸莎草 × 4 + 齿轮 × 1
 Config.PORTABLEMAP_INGREDIENTS = {
     { "cutgrass", 1 },
 }
+
+--------------------------------------------------------------------------
+-- 数值常量
+--------------------------------------------------------------------------
+Config.WORSHIP_RADIUS = 4          -- 上香判定距离（客户端预测与服务端权威判定共用）
+Config.TELEPORT_FROM_RADIUS = 12   -- 玩家周围多大范围内有已激活的庙，才算"站在庙旁"
+Config.MAP_TARGET_RADIUS = 8       -- 地图光标离庙图标多近算点中
+Config.TELEPORT_ARRIVE_MIN_DIST = 2 -- 传送落点：离庙最近多远
+Config.TELEPORT_ARRIVE_MAX_DIST = 8 -- 传送落点：离庙最远多远
+
+--------------------------------------------------------------------------
+-- 名字常量：跨文件写/读两端的字符串，改这里两端同时生效
+--------------------------------------------------------------------------
+Config.MINIMAP_ICON_ON = "landshrine_on.png"   -- 小地图图标：已激活（点亮）
+Config.MINIMAP_ICON_OFF = "landshrine_off.png" -- 小地图图标：未激活（灰暗）
+
+Config.SOUND_ACTIVATE = "yoth_2026/shrine/activate" -- 上香音效（原版马年骑士站台事件）
+Config.SOUND_PLACE = "yoth_2026/shrine/place"       -- 落成音效（同上）
+
+Config.TAG_MAP_ICON = "landshrineicon"              -- 穿雾地图图标实体的识别 tag
+Config.EVENT_ACTIVATED_DIRTY = "landshrineactivateddirty" -- 激活状态 net_bool 的 dirty 事件名
 
 --------------------------------------------------------------------------
 -- 运行时依赖：由 modmain 注入，勿手改
@@ -93,42 +116,20 @@ function Config:BuildWhitelist()
     whitelist = {}
     ready = false
 
-    local ground = self.ground
-    local logfn = self.logfn
-    if ground == nil then
-        if logfn ~= nil then
-            logfn("[土地庙] 未拿到 GROUND 常量表，地形白名单无法解析")
-        end
+    if self.ground == nil then
+        self:Warn("[土地庙] 未拿到 GROUND 常量表，地形白名单无法解析")
         return
     end
 
-    local function warn(msg)
-        if logfn ~= nil then
-            logfn(msg)
-        end
-    end
-
-    for name, base in pairs(Config.TERRAIN_ALIASES) do
-        local id, base_id = ground[name], ground[base]
-        if id == nil then
-            warn("[土地庙] 未知地形名（别名）：" .. tostring(name))
-        elseif base_id == nil then
-            warn("[土地庙] 未知地形名（别名目标）：" .. tostring(base))
-        else
-            whitelist[id] = base_id
-        end
-    end
-
-    for _, name in ipairs(Config.ALLOWED_TERRAIN) do
-        local id = ground[name]
-        if id == nil then
-            warn("[土地庙] 未知地形名：" .. tostring(name))
-        else
-            whitelist[id] = id
-        end
-    end
-
+    -- 解析逻辑在纯模块 landshrine_slots 里（可离线测试），这里只接线
+    whitelist = Slots.BuildWhitelist(self.ground, self.ALLOWED_TERRAIN, self.TERRAIN_ALIASES, self.logfn)
     ready = true
+end
+
+function Config:Warn(msg)
+    if self.logfn ~= nil then
+        self.logfn(msg)
+    end
 end
 
 function Config:IsReady()
@@ -162,9 +163,7 @@ function Config:ValidateBuildPoint(x, z, is_key_occupied)
 
     if not ready then
         -- 未初始化时宁可拒绝，也不要在日志缺失的情况下悄悄放行
-        if self.logfn ~= nil then
-            self.logfn("[土地庙] 配置未初始化，跳过建造校验前拒绝本次建造")
-        end
+        self:Warn("[土地庙] 配置未初始化，跳过建造校验前拒绝本次建造")
         return false, "LANDSHRINE_TERRAIN"
     end
 
